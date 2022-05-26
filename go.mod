@@ -1,3 +1,5 @@
-module fsuke1985/mysocket
+module learningGo
 
 go 1.18
+
+require k8s.io/klog v1.0.0 // indirect
