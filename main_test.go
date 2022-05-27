@@ -2,6 +2,11 @@ package main
 
 import "testing"
 
+func ReverseRunes(s string) {
+
+		return s
+}
+
 func TestReversRunes(t *testing.T) {
 	cases := []struct {
 		in, want string
