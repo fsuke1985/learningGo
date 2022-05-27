@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
 	redis "github.com/go-redis/redis/v7"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
@@ -17,15 +20,16 @@ import (
 var (
 	phrases = flag.String("phrases", "", "phrases")
 	//lint:ignore U1000 It's ok because this is just a example.
-	cancel  context.CancelFunc
-	ctx     context.Context
 
 	redisHost = flag.String("redisHost", "localhost", "")
 	recoveryQueue = flag.String("recoveryQueue", "recoverq", "")
+	electionPort = flag.Int("electionPort", 4040,"")
 	redisClient *redis.Client
 )
 
 func main() {
+	var ctx context.Context
+	var cancel context.CancelFunc
 
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:        *redisHost + ":6379",
@@ -45,12 +49,28 @@ func main() {
 
 	server := &http.Server{Addr: "4000"}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// Listen for interrupt. If so, cancel the context to stop transcriptions,
+	// then shutdown the HTTP server, which will end the main thread.
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		if cancel != nil {
+			cancel()
+		}
+		klog.Info("Received termination, stopping transciptions")
+		if err := server.Shutdown(context.TODO()); err != nil {
+			klog.Fatalf("Error shutting down HTTP server: %v", err)
+		}
+	}()
+
+	webHandler := func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel = context.WithCancel(context.Background())
 		go sendAudio(ctx)
 		w.WriteHeader(http.StatusOK)
-	})
+	}
 
+	http.HandleFunc("/", webHandler)
 	klog.Infof("Starting leader election listener at port %s", "4000")
 
 	server.ListenAndServe()
