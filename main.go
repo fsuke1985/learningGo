@@ -5,26 +5,25 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"strings"
-	"time"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	redis "github.com/go-redis/redis/v7"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 	"k8s.io/klog"
 )
 
-
 var (
-	phrases = flag.String("phrases", "", "phrases")
+	phrases = flag.String("phrases", "phrases", "phrases")
 	//lint:ignore U1000 It's ok because this is just a example.
 
-	redisHost = flag.String("redisHost", "localhost", "")
+	redisHost     = flag.String("redisHost", "localhost", "")
 	recoveryQueue = flag.String("recoveryQueue", "recoverq", "")
-	electionPort = flag.Int("electionPort", 4040,"")
-	redisClient *redis.Client
+	electionPort  = flag.Int("electionPort", 4040, "")
+	redisClient   *redis.Client
 )
 
 func main() {
@@ -52,7 +51,7 @@ func main() {
 	// Listen for interrupt. If so, cancel the context to stop transcriptions,
 	// then shutdown the HTTP server, which will end the main thread.
 	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-ch
 		if cancel != nil {
@@ -66,6 +65,10 @@ func main() {
 
 	webHandler := func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel = context.WithCancel(context.Background())
+
+		if strings.Contains(r.URL.Path, "start") {
+
+		}
 		go sendAudio(ctx)
 		w.WriteHeader(http.StatusOK)
 	}
@@ -73,7 +76,8 @@ func main() {
 	http.HandleFunc("/", webHandler)
 	klog.Infof("Starting leader election listener at port %s", "4000")
 
-	server.ListenAndServe()
+	//server.ListenAndServe()
+	http.ListenAndServe(":4000", nil)
 }
 
 func sendAudio(ctx context.Context) {
@@ -99,7 +103,6 @@ func sendAudio(ctx context.Context) {
 			// proc
 		}
 
-
 		var result string
 		var err error
 
@@ -108,7 +111,7 @@ func sendAudio(ctx context.Context) {
 		if doRecovery {
 			// todo
 			result, err = redisClient.RPop(*recoveryQueue).Result()
-			
+
 			if err == redis.Nil {
 				doRecovery = false
 				replaying = false

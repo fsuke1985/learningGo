@@ -1,16 +1,16 @@
 package main
 
 import (
-	"net/http"
-	"k8s.io/klog"
 	"fmt"
+	"k8s.io/klog"
+	"net/http"
 )
 
 var (
 	err error
 )
 
-func main() {
+func smain() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(r.Form)
@@ -24,5 +24,3 @@ func main() {
 		klog.Infof("ListenAndServer: ", err)
 	}
 }
-
-
