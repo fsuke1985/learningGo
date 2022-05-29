@@ -46,7 +46,7 @@ func main() {
 		klog.Infof("%d %+q", len(contextPhrases), contextPhrases)
 	}
 
-	server := &http.Server{Addr: "4000"}
+	server := &http.Server{Addr: ":4000"}
 
 	// Listen for interrupt. If so, cancel the context to stop transcriptions,
 	// then shutdown the HTTP server, which will end the main thread.
@@ -76,8 +76,8 @@ func main() {
 	http.HandleFunc("/", webHandler)
 	klog.Infof("Starting leader election listener at port %s", "4000")
 
-	//server.ListenAndServe()
-	http.ListenAndServe(":4000", nil)
+	server.ListenAndServe()
+	//http.ListenAndServe(":4000", nil)
 }
 
 func sendAudio(ctx context.Context) {
