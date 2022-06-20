@@ -3,17 +3,19 @@ package main
 import (
 	"context"
 	"flag"
-
-
-	"k8s.io/klog"
+	"time"
+	"k8s.io/klog/v2"
 )
 
 var (
-	electionPort = flag.Int("Port", 4040, "Listen port default")
+    electionPort = flag.Int("electionPort", 4040,
+		"Listen at this port for leader election updates. Set to zero to disable leader election")
+    flushTimeout = flag.Duration("flushTimeout", 3000*time.Millisecond, "Emit any pending transcriptions after this time")
+    lastIndex = 0
+    pending  []string
 )
 
 func main() {
-
 	flag.Parse()
 		/*
 			electionPort > 0
@@ -25,7 +27,7 @@ func main() {
 				method calling to sendAudio
 		*/
 
-	if *electionPort > 0 {
+    if *electionPort > 0 {
 
 	} else {
 		klog.Infof("ports is %i: call %v ", *electionPort, "sendAudio")
@@ -39,22 +41,44 @@ func sendAudio(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			klog.Infof("receive chanel cloesed")
+            klog.Infof("Context cancelled, exiting sender loop")	
 			return
-		case _, ok := <-receiveChan:
+        case _, ok := <-receiveChan:
 			if !ok { // ok is false
-				klog.Info("receive chan closed")
+				klog.Info("receive channel closed, resetting stream")
 				receiveChan = make(chan bool) // panic: close of closed channel
-				//continue
+                resetIndex()
+				continue
 			}
 		default:
 			// todo
 		}
 
-		go receiveResponses(receiveChan)
+		go receiveResponses(receiveChan, os.Getpid())
 	}
 }
 
 func receiveResponses(receiveChan chan bool) {
 	defer close(receiveChan)
+
+    timer := time.NewTimer(*flushTimeout)
+    go func() {
+        <-timer.C
+        flush()
+    }()
+
+    defer timer.Stop()
+
+    for {
+        if !timer.Stop() {
+            return
+        }
+        timer.Reset(*flushTimeout)
+    }
 }
+
+func resetIndex() {
+    lastIndex = 0
+    pending = nil
+}
+func flush() {}
